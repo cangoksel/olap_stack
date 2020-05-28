@@ -1,0 +1,659 @@
+version: "2.2"
+
+volumes:
+    druid_metadata_data_postgres: {}
+    zookeeper1_data: {}
+    zookeeper1_data_log: {}
+    zookeeper2_data: {}
+    zookeeper2_data_log: {}
+    zookeeper3_data: {}
+    zookeeper3_data_log: {}
+    kafka1_data: {}
+    kafka2_data: {}
+    kafka3_data: {}
+    druid_coordinator_data: {}
+    druid_coordinator_var: {}
+    druid_broker_var: {}
+    druid_historical_data: {}
+    druid_historical_var: {}
+    druid_middle_data: {}
+    druid_middle_var: {}
+    druid_router_var: {}
+    hadoop_namenode_data: {}
+    hadoop_datanode1_data: {}
+    hadoop_datanode2_data: {}
+    # hadoop_druid_segment_data: {}
+    # hadoop_druid_log_data: {}
+    superset_data: {}
+    superset_var: {}
+    nifi_conf: {}
+    nifi_state: {}
+    nifi_db: {}
+    nifi_flowfile: {}
+    nifi_content: {}
+    nifi_provenance: {}
+    redis_data: {}
+    superset_postgres_data: {}
+
+services: 
+    redis:
+      container_name: redis
+      hostname: redis
+      image: redis
+      restart: always
+      volumes:
+        - redis_data:/data
+
+    postgres_super:
+      container_name: postgres_super
+      hostname: postgres_super
+      image: postgres
+      restart: always
+      environment:
+        POSTGRES_DB: superset
+        POSTGRES_PASSWORD: superset
+        POSTGRES_USER: superset
+      volumes:
+        - superset_postgres_data:/var/lib/postgresql/data
+
+    # Execute after: docker exec -it superset superset-init
+    superset:
+      container_name: superset
+      hostname: superset
+      image: amancevice/superset
+      restart: always
+      depends_on:
+        - postgres_super
+        - redis
+      environment:
+        MAPBOX_API_KEY: ${MAPBOX_API_KEY}
+      ports:
+        - "8088:8088"
+      volumes:
+        - ./superset_config.py:/etc/superset/superset_config.py
+
+    postgres:
+        container_name: postgres
+        image: postgres:latest
+        hostname: postgres
+        volumes:
+          - druid_metadata_data_postgres:/var/lib/postgresql/data
+        environment:
+          - POSTGRES_PASSWORD=FoolishPassword
+          - POSTGRES_USER=druid
+          - POSTGRES_DB=druid
+
+    zookeeper1:
+      container_name: zookeeper1
+      image: zookeeper:3.5
+      hostname: zookeeper1
+      ports:
+        - "2181:2181"
+      environment:
+          ZOO_MY_ID: 1
+          ZOO_PORT: 2181
+          ZOO_SERVERS: server.1=zookeeper1:2888:3888;2181 server.2=zookeeper2:2888:3888;2182 server.3=zookeeper3:2888:3888;2183
+      volumes:
+        - zookeeper1_data:/data
+        - zookeeper1_data_log:/datalog
+
+    zookeeper2:
+      container_name: zookeeper2
+      image: zookeeper:3.5
+      hostname: zookeeper2
+      ports:
+        - "2182:2182"
+      environment:
+          ZOO_MY_ID: 2
+          ZOO_PORT: 2182
+          ZOO_SERVERS: server.1=zookeeper1:2888:3888;2181 server.2=zookeeper2:2888:3888;2182 server.3=zookeeper3:2888:3888;2183
+      volumes:
+        - zookeeper2_data:/data
+        - zookeeper2_data_log:/datalog
+
+    zookeeper3:
+      container_name: zookeeper3
+      image: zookeeper:3.5
+      hostname: zookeeper3
+      ports:
+        - "2183:2183"
+      environment:
+          ZOO_MY_ID: 3
+          ZOO_PORT: 2183
+          ZOO_SERVERS: server.1=zookeeper1:2888:3888;2181 server.2=zookeeper2:2888:3888;2182 server.3=zookeeper3:2888:3888;2183
+      volumes:
+        - zookeeper3_data:/data
+        - zookeeper3_data_log:/datalog
+
+    zookeeperweb:
+      container_name: zookeeperweb
+      image: juris/zkui
+      depends_on:
+        - zookeeper1
+        - zookeeper2
+        - zookeeper3
+      ports:
+        - "9090:9090"
+      environment:
+        ZK_SERVER: zookeeper1:2181,zookeeper2:2182,zookeeper3:2183
+
+    zoonavigator:
+      container_name: zoonavigator
+      image: elkozmon/zoonavigator:0.8.0
+      ports:
+        - "8004:8000"
+      environment:
+        HTTP_PORT: 8000
+        AUTO_CONNECT_CONNECTION_STRING: zookeeper1:2181
+
+    kafka1:
+      container_name: kafka1
+      image: confluentinc/cp-kafka:5.5.0-1-deb8
+      hostname: kafka1
+      ports:
+        - "9092:9092"
+      environment:
+        DOCKER_HOST_IP: 192.168.99.100
+        KAFKA_ADVERTISED_LISTENERS: LISTENER_DOCKER_INTERNAL://kafka1:19092,LISTENER_DOCKER_EXTERNAL://${DOCKER_HOST_IP:-127.0.0.1}:9092
+        KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: LISTENER_DOCKER_INTERNAL:PLAINTEXT,LISTENER_DOCKER_EXTERNAL:PLAINTEXT
+        KAFKA_INTER_BROKER_LISTENER_NAME: LISTENER_DOCKER_INTERNAL
+        KAFKA_ZOOKEEPER_CONNECT: "zookeeper1:2181,zookeeper2:2182,zookeeper3:2183"
+        KAFKA_BROKER_ID: 1
+        KAFKA_LOG4J_LOGGERS: "kafka.controller=INFO,kafka.producer.async.DefaultEventHandler=INFO,state.change.logger=INFO"
+      volumes:
+        - kafka1_data:/var/lib/kafka/data
+      depends_on:
+        - zookeeper1
+        - zookeeper2
+        - zookeeper3
+  
+    kafka2:
+      container_name: kafka2
+      image: confluentinc/cp-kafka:5.5.0-1-deb8
+      hostname: kafka2
+      ports:
+        - "9093:9093"
+      environment:
+        DOCKER_HOST_IP: 192.168.99.100
+        KAFKA_ADVERTISED_LISTENERS: LISTENER_DOCKER_INTERNAL://kafka2:19093,LISTENER_DOCKER_EXTERNAL://${DOCKER_HOST_IP:-127.0.0.1}:9093
+        KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: LISTENER_DOCKER_INTERNAL:PLAINTEXT,LISTENER_DOCKER_EXTERNAL:PLAINTEXT
+        KAFKA_INTER_BROKER_LISTENER_NAME: LISTENER_DOCKER_INTERNAL
+        KAFKA_ZOOKEEPER_CONNECT: "zookeeper1:2181,zookeeper2:2182,zookeeper3:2183"
+        KAFKA_BROKER_ID: 2
+        KAFKA_LOG4J_LOGGERS: "kafka.controller=INFO,kafka.producer.async.DefaultEventHandler=INFO,state.change.logger=INFO"
+      volumes:
+        - kafka2_data:/var/lib/kafka/data
+      depends_on:
+        - zookeeper1
+        - zookeeper2
+        - zookeeper3
+  
+    kafka3:
+      container_name: kafka3
+      image: confluentinc/cp-kafka:5.5.0-1-deb8    
+      hostname: kafka3
+      ports:
+        - "9094:9094"
+      environment:
+        DOCKER_HOST_IP: 192.168.99.100
+        KAFKA_ADVERTISED_LISTENERS: LISTENER_DOCKER_INTERNAL://kafka3:19094,LISTENER_DOCKER_EXTERNAL://${DOCKER_HOST_IP:-127.0.0.1}:9094
+        KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: LISTENER_DOCKER_INTERNAL:PLAINTEXT,LISTENER_DOCKER_EXTERNAL:PLAINTEXT
+        KAFKA_INTER_BROKER_LISTENER_NAME: LISTENER_DOCKER_INTERNAL
+        KAFKA_ZOOKEEPER_CONNECT: "zookeeper1:2181,zookeeper2:2182,zookeeper3:2183"
+        KAFKA_BROKER_ID: 3
+        KAFKA_LOG4J_LOGGERS: "kafka.controller=INFO,kafka.producer.async.DefaultEventHandler=INFO,state.change.logger=INFO"
+      volumes:
+        - kafka3_data:/var/lib/kafka/data
+      depends_on:
+        - zookeeper1
+        - zookeeper2
+        - zookeeper3
+
+    kafdrop:
+      container_name: kafdrop
+      image: obsidiandynamics/kafdrop
+      restart: "no"
+      ports:
+        - "8005:9000"
+      environment:
+        KAFKA_BROKERCONNECT: "kafka1:19092,kafka2:19093,kafka3:19094"
+        JVM_OPTS: "-Xms16M -Xmx48M -Xss180K -XX:-TieredCompilation -XX:+UseStringDeduplication -noverify"
+      depends_on:
+        - kafka3
+        - kafka2
+        - kafka1
+
+    namenode:
+      image: bde2020/hadoop-namenode:2.0.0-hadoop3.2.1-java8
+      container_name: hadoop_namenode
+      hostname: namenode
+      restart: always
+      ports:
+        - 9870:9870
+        - 9000:9000
+      volumes:
+        - hadoop_namenode_data:/hadoop/dfs/name
+      environment:
+        CLUSTER_NAME: test
+        CORE_CONF_fs_defaultFS: hdfs://namenode:9000
+        CORE_CONF_hadoop_http_staticuser_user: root
+        CORE_CONF_hadoop_proxyuser_hue_hosts: "*"
+        CORE_CONF_hadoop_proxyuser_hue_groups: "*"
+        CORE_CONF_io_compression_codecs: org.apache.hadoop.io.compress.SnappyCodec
+        HDFS_CONF_dfs_webhdfs_enabled: "true"
+        HDFS_CONF_dfs_permissions_enabled: "false"
+        HDFS_CONF_dfs_namenode_datanode_registration_ip___hostname___check: "false"
+        YARN_CONF_yarn_log___aggregation___enable: "true"
+        YARN_CONF_yarn_log_server_url: http://historyserver:8188/applicationhistory/logs/
+        YARN_CONF_yarn_resourcemanager_recovery_enabled: "true"
+        YARN_CONF_yarn_resourcemanager_store_class: org.apache.hadoop.yarn.server.resourcemanager.recovery.FileSystemRMStateStore
+        YARN_CONF_yarn_resourcemanager_scheduler_class: org.apache.hadoop.yarn.server.resourcemanager.scheduler.capacity.CapacityScheduler
+        YARN_CONF_yarn_scheduler_capacity_root_default_maximum___allocation___mb: 8192
+        YARN_CONF_yarn_scheduler_capacity_root_default_maximum___allocation___vcores: 4
+        YARN_CONF_yarn_resourcemanager_fs_state___store_uri: /rmstate
+        YARN_CONF_yarn_resourcemanager_system___metrics___publisher_enabled: "true"
+        YARN_CONF_yarn_resourcemanager_hostname: resourcemanager
+        YARN_CONF_yarn_resourcemanager_address: resourcemanager:8032
+        YARN_CONF_yarn_resourcemanager_scheduler_address: resourcemanager:8030
+        YARN_CONF_yarn_resourcemanager_resource__tracker_address: resourcemanager:8031
+        YARN_CONF_yarn_timeline___service_enabled: "true"
+        YARN_CONF_yarn_timeline___service_generic___application___history_enabled: "true"
+        YARN_CONF_yarn_timeline___service_hostname: historyserver
+        YARN_CONF_mapreduce_map_output_compress: "true"
+        YARN_CONF_mapred_map_output_compress_codec: org.apache.hadoop.io.compress.SnappyCodec
+        YARN_CONF_yarn_nodemanager_resource_memory___mb: 16384
+        YARN_CONF_yarn_nodemanager_resource_cpu___vcores: 8
+        YARN_CONF_yarn_nodemanager_disk___health___checker_max___disk___utilization___per___disk___percentage: 98.5
+        YARN_CONF_yarn_nodemanager_remote___app___log___dir: /app-logs
+        YARN_CONF_yarn_nodemanager_aux___services: mapreduce_shuffle
+        MAPRED_CONF_mapreduce_framework_name: yarn
+        MAPRED_CONF_mapred_child_java_opts: -Xmx4096m
+        MAPRED_CONF_mapreduce_map_memory_mb: 4096
+        MAPRED_CONF_mapreduce_reduce_memory_mb: 8192
+        MAPRED_CONF_mapreduce_map_java_opts: -Xmx3072m
+        MAPRED_CONF_mapreduce_reduce_java_opts: -Xmx6144m
+        MAPRED_CONF_yarn_app_mapreduce_am_env: "HADOOP_MAPRED_HOME: /opt/hadoop-3.2.1/"
+        MAPRED_CONF_mapreduce_map_env: "HADOOP_MAPRED_HOME: /opt/hadoop-3.2.1/"
+        MAPRED_CONF_mapreduce_reduce_env: "HADOOP_MAPRED_HOME: /opt/hadoop-3.2.1/"
+  
+    datanode1:
+      image: bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
+      container_name: hadoop_datanode1
+      restart: always
+      volumes:
+        - hadoop_datanode1_data:/hadoop/dfs/data
+      environment:
+        SERVICE_PRECONDITION: "namenode:9870"
+        CORE_CONF_fs_defaultFS: hdfs://namenode:9000
+        CORE_CONF_hadoop_http_staticuser_user: root
+        CORE_CONF_hadoop_proxyuser_hue_hosts: "*"
+        CORE_CONF_hadoop_proxyuser_hue_groups: "*"
+        CORE_CONF_io_compression_codecs: org.apache.hadoop.io.compress.SnappyCodec
+        HDFS_CONF_dfs_webhdfs_enabled: "true"
+        HDFS_CONF_dfs_permissions_enabled: "false"
+        HDFS_CONF_dfs_namenode_datanode_registration_ip___hostname___check: "false"
+        YARN_CONF_yarn_log___aggregation___enable: "true"
+        YARN_CONF_yarn_log_server_url: http://historyserver:8188/applicationhistory/logs/
+        YARN_CONF_yarn_resourcemanager_recovery_enabled: "true"
+        YARN_CONF_yarn_resourcemanager_store_class: org.apache.hadoop.yarn.server.resourcemanager.recovery.FileSystemRMStateStore
+        YARN_CONF_yarn_resourcemanager_scheduler_class: org.apache.hadoop.yarn.server.resourcemanager.scheduler.capacity.CapacityScheduler
+        YARN_CONF_yarn_scheduler_capacity_root_default_maximum___allocation___mb: 8192
+        YARN_CONF_yarn_scheduler_capacity_root_default_maximum___allocation___vcores: 4
+        YARN_CONF_yarn_resourcemanager_fs_state___store_uri: /rmstate
+        YARN_CONF_yarn_resourcemanager_system___metrics___publisher_enabled: "true"
+        YARN_CONF_yarn_resourcemanager_hostname: resourcemanager
+        YARN_CONF_yarn_resourcemanager_address: resourcemanager:8032
+        YARN_CONF_yarn_resourcemanager_scheduler_address: resourcemanager:8030
+        YARN_CONF_yarn_resourcemanager_resource__tracker_address: resourcemanager:8031
+        YARN_CONF_yarn_timeline___service_enabled: "true"
+        YARN_CONF_yarn_timeline___service_generic___application___history_enabled: "true"
+        YARN_CONF_yarn_timeline___service_hostname: historyserver
+        YARN_CONF_mapreduce_map_output_compress: "true"
+        YARN_CONF_mapred_map_output_compress_codec: org.apache.hadoop.io.compress.SnappyCodec
+        YARN_CONF_yarn_nodemanager_resource_memory___mb: 16384
+        YARN_CONF_yarn_nodemanager_resource_cpu___vcores: 8
+        YARN_CONF_yarn_nodemanager_disk___health___checker_max___disk___utilization___per___disk___percentage: 98.5
+        YARN_CONF_yarn_nodemanager_remote___app___log___dir: /app-logs
+        YARN_CONF_yarn_nodemanager_aux___services: mapreduce_shuffle
+        MAPRED_CONF_mapreduce_framework_name: yarn
+        MAPRED_CONF_mapred_child_java_opts: -Xmx4096m
+        MAPRED_CONF_mapreduce_map_memory_mb: 4096
+        MAPRED_CONF_mapreduce_reduce_memory_mb: 8192
+        MAPRED_CONF_mapreduce_map_java_opts: -Xmx3072m
+        MAPRED_CONF_mapreduce_reduce_java_opts: -Xmx6144m
+        MAPRED_CONF_yarn_app_mapreduce_am_env: "HADOOP_MAPRED_HOME: /opt/hadoop-3.2.1/"
+        MAPRED_CONF_mapreduce_map_env: "HADOOP_MAPRED_HOME: /opt/hadoop-3.2.1/"
+        MAPRED_CONF_mapreduce_reduce_env: "HADOOP_MAPRED_HOME: /opt/hadoop-3.2.1/"
+  
+    datanode2:
+      image: bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
+      container_name: hadoop_datanode2
+      restart: always
+      volumes:
+        - hadoop_datanode2_data:/hadoop/dfs/data
+      environment:
+        SERVICE_PRECONDITION: "namenode:9870"
+        CORE_CONF_fs_defaultFS: hdfs://namenode:9000
+        CORE_CONF_hadoop_http_staticuser_user: root
+        CORE_CONF_hadoop_proxyuser_hue_hosts: "*"
+        CORE_CONF_hadoop_proxyuser_hue_groups: "*"
+        CORE_CONF_io_compression_codecs: org.apache.hadoop.io.compress.SnappyCodec
+        HDFS_CONF_dfs_webhdfs_enabled: "true"
+        HDFS_CONF_dfs_permissions_enabled: "false"
+        HDFS_CONF_dfs_namenode_datanode_registration_ip___hostname___check: "false"
+        YARN_CONF_yarn_log___aggregation___enable: "true"
+        YARN_CONF_yarn_log_server_url: http://historyserver:8188/applicationhistory/logs/
+        YARN_CONF_yarn_resourcemanager_recovery_enabled: "true"
+        YARN_CONF_yarn_resourcemanager_store_class: org.apache.hadoop.yarn.server.resourcemanager.recovery.FileSystemRMStateStore
+        YARN_CONF_yarn_resourcemanager_scheduler_class: org.apache.hadoop.yarn.server.resourcemanager.scheduler.capacity.CapacityScheduler
+        YARN_CONF_yarn_scheduler_capacity_root_default_maximum___allocation___mb: 8192
+        YARN_CONF_yarn_scheduler_capacity_root_default_maximum___allocation___vcores: 4
+        YARN_CONF_yarn_resourcemanager_fs_state___store_uri: /rmstate
+        YARN_CONF_yarn_resourcemanager_system___metrics___publisher_enabled: "true"
+        YARN_CONF_yarn_resourcemanager_hostname: resourcemanager
+        YARN_CONF_yarn_resourcemanager_address: resourcemanager:8032
+        YARN_CONF_yarn_resourcemanager_scheduler_address: resourcemanager:8030
+        YARN_CONF_yarn_resourcemanager_resource__tracker_address: resourcemanager:8031
+        YARN_CONF_yarn_timeline___service_enabled: "true"
+        YARN_CONF_yarn_timeline___service_generic___application___history_enabled: "true"
+        YARN_CONF_yarn_timeline___service_hostname: historyserver
+        YARN_CONF_mapreduce_map_output_compress: "true"
+        YARN_CONF_mapred_map_output_compress_codec: org.apache.hadoop.io.compress.SnappyCodec
+        YARN_CONF_yarn_nodemanager_resource_memory___mb: 16384
+        YARN_CONF_yarn_nodemanager_resource_cpu___vcores: 8
+        YARN_CONF_yarn_nodemanager_disk___health___checker_max___disk___utilization___per___disk___percentage: 98.5
+        YARN_CONF_yarn_nodemanager_remote___app___log___dir: /app-logs
+        YARN_CONF_yarn_nodemanager_aux___services: mapreduce_shuffle
+        MAPRED_CONF_mapreduce_framework_name: yarn
+        MAPRED_CONF_mapred_child_java_opts: -Xmx4096m
+        MAPRED_CONF_mapreduce_map_memory_mb: 4096
+        MAPRED_CONF_mapreduce_reduce_memory_mb: 8192
+        MAPRED_CONF_mapreduce_map_java_opts: -Xmx3072m
+        MAPRED_CONF_mapreduce_reduce_java_opts: -Xmx6144m
+        MAPRED_CONF_yarn_app_mapreduce_am_env: "HADOOP_MAPRED_HOME: /opt/hadoop-3.2.1/"
+        MAPRED_CONF_mapreduce_map_env: "HADOOP_MAPRED_HOME: /opt/hadoop-3.2.1/"
+        MAPRED_CONF_mapreduce_reduce_env: "HADOOP_MAPRED_HOME: /opt/hadoop-3.2.1/"
+    
+    resourcemanager:
+      image: bde2020/hadoop-resourcemanager:2.0.0-hadoop3.2.1-java8
+      container_name: hadoop_resourcemanager
+      restart: always
+      environment:
+        SERVICE_PRECONDITION: "namenode:9000 namenode:9870 datanode1:9864 datanode2:9864"
+        CORE_CONF_fs_defaultFS: hdfs://namenode:9000
+        CORE_CONF_hadoop_http_staticuser_user: root
+        CORE_CONF_hadoop_proxyuser_hue_hosts: "*"
+        CORE_CONF_hadoop_proxyuser_hue_groups: "*"
+        CORE_CONF_io_compression_codecs: org.apache.hadoop.io.compress.SnappyCodec
+        HDFS_CONF_dfs_webhdfs_enabled: "true"
+        HDFS_CONF_dfs_permissions_enabled: "false"
+        HDFS_CONF_dfs_namenode_datanode_registration_ip___hostname___check: "false"
+        YARN_CONF_yarn_log___aggregation___enable: "true"
+        YARN_CONF_yarn_log_server_url: http://historyserver:8188/applicationhistory/logs/
+        YARN_CONF_yarn_resourcemanager_recovery_enabled: "true"
+        YARN_CONF_yarn_resourcemanager_store_class: org.apache.hadoop.yarn.server.resourcemanager.recovery.FileSystemRMStateStore
+        YARN_CONF_yarn_resourcemanager_scheduler_class: org.apache.hadoop.yarn.server.resourcemanager.scheduler.capacity.CapacityScheduler
+        YARN_CONF_yarn_scheduler_capacity_root_default_maximum___allocation___mb: 8192
+        YARN_CONF_yarn_scheduler_capacity_root_default_maximum___allocation___vcores: 4
+        YARN_CONF_yarn_resourcemanager_fs_state___store_uri: /rmstate
+        YARN_CONF_yarn_resourcemanager_system___metrics___publisher_enabled: "true"
+        YARN_CONF_yarn_resourcemanager_hostname: resourcemanager
+        YARN_CONF_yarn_resourcemanager_address: resourcemanager:8032
+        YARN_CONF_yarn_resourcemanager_scheduler_address: resourcemanager:8030
+        YARN_CONF_yarn_resourcemanager_resource__tracker_address: resourcemanager:8031
+        YARN_CONF_yarn_timeline___service_enabled: "true"
+        YARN_CONF_yarn_timeline___service_generic___application___history_enabled: "true"
+        YARN_CONF_yarn_timeline___service_hostname: historyserver
+        YARN_CONF_mapreduce_map_output_compress: "true"
+        YARN_CONF_mapred_map_output_compress_codec: org.apache.hadoop.io.compress.SnappyCodec
+        YARN_CONF_yarn_nodemanager_resource_memory___mb: 16384
+        YARN_CONF_yarn_nodemanager_resource_cpu___vcores: 8
+        YARN_CONF_yarn_nodemanager_disk___health___checker_max___disk___utilization___per___disk___percentage: 98.5
+        YARN_CONF_yarn_nodemanager_remote___app___log___dir: /app-logs
+        YARN_CONF_yarn_nodemanager_aux___services: mapreduce_shuffle
+        MAPRED_CONF_mapreduce_framework_name: yarn
+        MAPRED_CONF_mapred_child_java_opts: -Xmx4096m
+        MAPRED_CONF_mapreduce_map_memory_mb: 4096
+        MAPRED_CONF_mapreduce_reduce_memory_mb: 8192
+        MAPRED_CONF_mapreduce_map_java_opts: -Xmx3072m
+        MAPRED_CONF_mapreduce_reduce_java_opts: -Xmx6144m
+        MAPRED_CONF_yarn_app_mapreduce_am_env: "HADOOP_MAPRED_HOME: /opt/hadoop-3.2.1/"
+        MAPRED_CONF_mapreduce_map_env: "HADOOP_MAPRED_HOME: /opt/hadoop-3.2.1/"
+        MAPRED_CONF_mapreduce_reduce_env: "HADOOP_MAPRED_HOME: /opt/hadoop-3.2.1/"
+  
+    nodemanager:
+      image: bde2020/hadoop-nodemanager:2.0.0-hadoop3.2.1-java8
+      container_name: hadoop_nodemanager
+      restart: always
+      environment:
+        SERVICE_PRECONDITION: "namenode:9000 namenode:9870 datanode1:9864 datanode2:9864 resourcemanager:8088"
+        CORE_CONF_fs_defaultFS: hdfs://namenode:9000
+        CORE_CONF_hadoop_http_staticuser_user: root
+        CORE_CONF_hadoop_proxyuser_hue_hosts: "*"
+        CORE_CONF_hadoop_proxyuser_hue_groups: "*"
+        CORE_CONF_io_compression_codecs: org.apache.hadoop.io.compress.SnappyCodec
+        HDFS_CONF_dfs_webhdfs_enabled: "true"
+        HDFS_CONF_dfs_permissions_enabled: "false"
+        HDFS_CONF_dfs_namenode_datanode_registration_ip___hostname___check: "false"
+        YARN_CONF_yarn_log___aggregation___enable: "true"
+        YARN_CONF_yarn_log_server_url: http://historyserver:8188/applicationhistory/logs/
+        YARN_CONF_yarn_resourcemanager_recovery_enabled: "true"
+        YARN_CONF_yarn_resourcemanager_store_class: org.apache.hadoop.yarn.server.resourcemanager.recovery.FileSystemRMStateStore
+        YARN_CONF_yarn_resourcemanager_scheduler_class: org.apache.hadoop.yarn.server.resourcemanager.scheduler.capacity.CapacityScheduler
+        YARN_CONF_yarn_scheduler_capacity_root_default_maximum___allocation___mb: 8192
+        YARN_CONF_yarn_scheduler_capacity_root_default_maximum___allocation___vcores: 4
+        YARN_CONF_yarn_resourcemanager_fs_state___store_uri: /rmstate
+        YARN_CONF_yarn_resourcemanager_system___metrics___publisher_enabled: "true"
+        YARN_CONF_yarn_resourcemanager_hostname: resourcemanager
+        YARN_CONF_yarn_resourcemanager_address: resourcemanager:8032
+        YARN_CONF_yarn_resourcemanager_scheduler_address: resourcemanager:8030
+        YARN_CONF_yarn_resourcemanager_resource__tracker_address: resourcemanager:8031
+        YARN_CONF_yarn_timeline___service_enabled: "true"
+        YARN_CONF_yarn_timeline___service_generic___application___history_enabled: "true"
+        YARN_CONF_yarn_timeline___service_hostname: historyserver
+        YARN_CONF_mapreduce_map_output_compress: "true"
+        YARN_CONF_mapred_map_output_compress_codec: org.apache.hadoop.io.compress.SnappyCodec
+        YARN_CONF_yarn_nodemanager_resource_memory___mb: 16384
+        YARN_CONF_yarn_nodemanager_resource_cpu___vcores: 8
+        YARN_CONF_yarn_nodemanager_disk___health___checker_max___disk___utilization___per___disk___percentage: 98.5
+        YARN_CONF_yarn_nodemanager_remote___app___log___dir: /app-logs
+        YARN_CONF_yarn_nodemanager_aux___services: mapreduce_shuffle
+        MAPRED_CONF_mapreduce_framework_name: yarn
+        MAPRED_CONF_mapred_child_java_opts: -Xmx4096m
+        MAPRED_CONF_mapreduce_map_memory_mb: 4096
+        MAPRED_CONF_mapreduce_reduce_memory_mb: 8192
+        MAPRED_CONF_mapreduce_map_java_opts: -Xmx3072m
+        MAPRED_CONF_mapreduce_reduce_java_opts: -Xmx6144m
+        MAPRED_CONF_yarn_app_mapreduce_am_env: "HADOOP_MAPRED_HOME: /opt/hadoop-3.2.1/"
+        MAPRED_CONF_mapreduce_map_env: "HADOOP_MAPRED_HOME: /opt/hadoop-3.2.1/"
+        MAPRED_CONF_mapreduce_reduce_env: "HADOOP_MAPRED_HOME: /opt/hadoop-3.2.1/"
+    
+    historyserver:
+      image: bde2020/hadoop-historyserver:2.0.0-hadoop3.2.1-java8
+      container_name: hadoop_historyserver
+      restart: always
+      volumes:
+        - ./hadoop_historyserver:/hadoop/yarn/timeline
+      environment: 
+        SERVICE_PRECONDITION: "namenode:9000 namenode:9870 datanode1:9864 datanode2:9864 resourcemanager:8088"
+        CORE_CONF_fs_defaultFS: hdfs://namenode:9000
+        CORE_CONF_hadoop_http_staticuser_user: root
+        CORE_CONF_hadoop_proxyuser_hue_hosts: "*"
+        CORE_CONF_hadoop_proxyuser_hue_groups: "*"
+        CORE_CONF_io_compression_codecs: org.apache.hadoop.io.compress.SnappyCodec
+        HDFS_CONF_dfs_webhdfs_enabled: "true"
+        HDFS_CONF_dfs_permissions_enabled: "false"
+        HDFS_CONF_dfs_namenode_datanode_registration_ip___hostname___check: "false"
+        YARN_CONF_yarn_log___aggregation___enable: "true"
+        YARN_CONF_yarn_log_server_url: http://historyserver:8188/applicationhistory/logs/
+        YARN_CONF_yarn_resourcemanager_recovery_enabled: "true"
+        YARN_CONF_yarn_resourcemanager_store_class: org.apache.hadoop.yarn.server.resourcemanager.recovery.FileSystemRMStateStore
+        YARN_CONF_yarn_resourcemanager_scheduler_class: org.apache.hadoop.yarn.server.resourcemanager.scheduler.capacity.CapacityScheduler
+        YARN_CONF_yarn_scheduler_capacity_root_default_maximum___allocation___mb: 8192
+        YARN_CONF_yarn_scheduler_capacity_root_default_maximum___allocation___vcores: 4
+        YARN_CONF_yarn_resourcemanager_fs_state___store_uri: /rmstate
+        YARN_CONF_yarn_resourcemanager_system___metrics___publisher_enabled: "true"
+        YARN_CONF_yarn_resourcemanager_hostname: resourcemanager
+        YARN_CONF_yarn_resourcemanager_address: resourcemanager:8032
+        YARN_CONF_yarn_resourcemanager_scheduler_address: resourcemanager:8030
+        YARN_CONF_yarn_resourcemanager_resource__tracker_address: resourcemanager:8031
+        YARN_CONF_yarn_timeline___service_enabled: "true"
+        YARN_CONF_yarn_timeline___service_generic___application___history_enabled: "true"
+        YARN_CONF_yarn_timeline___service_hostname: historyserver
+        YARN_CONF_mapreduce_map_output_compress: "true"
+        YARN_CONF_mapred_map_output_compress_codec: org.apache.hadoop.io.compress.SnappyCodec
+        YARN_CONF_yarn_nodemanager_resource_memory___mb: 16384
+        YARN_CONF_yarn_nodemanager_resource_cpu___vcores: 8
+        YARN_CONF_yarn_nodemanager_disk___health___checker_max___disk___utilization___per___disk___percentage: 98.5
+        YARN_CONF_yarn_nodemanager_remote___app___log___dir: /app-logs
+        YARN_CONF_yarn_nodemanager_aux___services: mapreduce_shuffle
+        MAPRED_CONF_mapreduce_framework_name: yarn
+        MAPRED_CONF_mapred_child_java_opts: -Xmx4096m
+        MAPRED_CONF_mapreduce_map_memory_mb: 4096
+        MAPRED_CONF_mapreduce_reduce_memory_mb: 8192
+        MAPRED_CONF_mapreduce_map_java_opts: -Xmx3072m
+        MAPRED_CONF_mapreduce_reduce_java_opts: -Xmx6144m
+        MAPRED_CONF_yarn_app_mapreduce_am_env: "HADOOP_MAPRED_HOME: /opt/hadoop-3.2.1/"
+        MAPRED_CONF_mapreduce_map_env: "HADOOP_MAPRED_HOME: /opt/hadoop-3.2.1/"
+        MAPRED_CONF_mapreduce_reduce_env: "HADOOP_MAPRED_HOME: /opt/hadoop-3.2.1/"
+    
+    coordinator:
+      image: apache/druid:0.17.0
+      container_name: druid_coordinator
+      volumes:
+        - druid_coordinator_data:/opt/data
+        - druid_coordinator_var:/opt/druid/var
+      depends_on: 
+        - zookeeper1
+        - zookeeper2
+        - zookeeper3
+        - postgres
+        - namenode
+        - datanode1
+        - datanode2
+        - resourcemanager
+        - nodemanager
+        - historyserver
+      ports:
+        - "8081:8081"
+      command:
+        - coordinator
+      env_file:
+        - druid_environment
+  
+    broker:
+      image: apache/druid:0.17.0
+      container_name: druid_broker
+      volumes:
+        - druid_broker_var:/opt/druid/var
+      depends_on: 
+        - zookeeper1
+        - zookeeper2
+        - zookeeper3
+        - postgres
+        - coordinator
+        - namenode
+        - datanode1
+        - datanode2
+        - resourcemanager
+        - nodemanager
+        - historyserver
+      ports:
+        - "8082:8082"
+      command:
+        - broker
+      env_file:
+        - druid_environment
+        
+  
+    historical:
+      image: apache/druid:0.17.0
+      container_name: druid_historical
+      volumes:
+        - druid_historical_data:/opt/data
+        - druid_historical_var:/opt/druid/var
+      depends_on: 
+        - zookeeper1
+        - zookeeper2
+        - zookeeper3
+        - postgres
+        - coordinator
+        - namenode
+        - datanode1
+        - datanode2
+        - resourcemanager
+        - nodemanager
+        - historyserver
+      ports:
+        - "8083:8083"
+      command:
+        - historical
+      env_file:
+        - druid_environment
+  
+  
+    middlemanager:
+      image: apache/druid:0.17.0
+      container_name: druid_middlemanager
+      volumes:
+        - druid_middle_data:/opt/data
+        - druid_middle_var:/opt/druid/var
+      depends_on: 
+        - zookeeper1
+        - zookeeper2
+        - zookeeper3
+        - postgres
+        - coordinator
+        - namenode
+        - datanode1
+        - datanode2
+        - resourcemanager
+        - nodemanager
+        - historyserver
+      ports:
+        - "8091:8091"
+      command:
+        - middleManager
+      env_file:
+        - druid_environment
+  
+    router:
+      image: apache/druid:0.17.0
+      container_name: druid_router
+      volumes:
+        - druid_router_var:/opt/druid/var
+      depends_on:
+        - zookeeper1
+        - zookeeper2
+        - zookeeper3
+        - postgres
+        - coordinator
+        - namenode
+        - datanode1
+        - datanode2
+        - resourcemanager
+        - nodemanager
+        - historyserver
+      ports:
+        - "8888:8888"
+      # volumes_from:
+      #   - druid-vols
+      command:
+        - router
+      env_file:
+        - druid_environment
+  
+    nifi:
+      image: apache/nifi
+      container_name: nifi
+      volumes:
+        - nifi_conf:/opt/nifi/conf
+        - nifi_state:/data/nifi/state
+        - nifi_db:/opt/nifi/database_repository
+        - nifi_flowfile:/opt/nifi/flowfile_repository
+        - nifi_content:/opt/nifi/content_repository
+        - nifi_provenance:/opt/nifi/provenance_repository 
+      ports:
+        - "9080:9080"
+      environment:
+        - NIFI_WEB_HTTP_PORT=9080  
