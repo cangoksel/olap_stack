@@ -24,3 +24,17 @@ list of apps:
    * historical
    * middlemanager
    * router
+   
+![](screenshots/zookeper-druid.png)
+![](screenshots/zookeper-kafka.png)
+![](screenshots/nifi.png)
+![](screenshots/kafka.png)
+![](screenshots/druid.png)
+![](screenshots/druid1.png)
+![](screenshots/druid2.png)
+![](screenshots/druid3.png)
+![](screenshots/druid4.png)
+![](screenshots/druid5.png)
+![](screenshots/druid6.png)
+![](screenshots/hdfs.png)
+![](screenshots/superset.png)
