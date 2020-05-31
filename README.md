@@ -1,7 +1,6 @@
 # olap_stack
 
-In this docker-compose project itegrated.
-
+In this docker-compose project,  list of apps that integrated:
 * redis
 * postgres
 * nifi
