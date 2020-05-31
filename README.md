@@ -23,7 +23,7 @@ list of apps:
    * broker
    * historical
    * middlemanager
-   * router
+   * router.
    
 ![](screenshots/zookeper-druid.png)
 ![](screenshots/zookeper-kafka.png)
