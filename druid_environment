@@ -25,8 +25,8 @@ DRUID_NEWSIZE=250m
 DRUID_MAXDIRECTMEMORYSIZE=6172m
 
 druid_emitter_logging_logLevel=debug
-# "druid-kafka-eight","simple-client-sslcontext",
-druid_extensions_loadList=["druid-avro-extensions","druid-kafka-extraction-namespace","druid-lookups-cached-single","druid-basic-security","druid-hdfs-storage","druid-kafka-indexing-service","druid-protobuf-extensions","postgresql-metadata-storage","druid-bloom-filter","druid-histogram","druid-kerberos","druid-s3-extensions","druid-datasketches","druid-lookups-cached-global","druid-stats"]
+# "druid-kafka-eight","simple-client-sslcontext","druid-s3-extensions"
+druid_extensions_loadList=["druid-avro-extensions","druid-kafka-extraction-namespace","druid-lookups-cached-single","druid-basic-security","druid-hdfs-storage","druid-kafka-indexing-service","druid-protobuf-extensions","postgresql-metadata-storage","druid-bloom-filter","druid-histogram","druid-kerberos","druid-datasketches","druid-lookups-cached-global","druid-stats"]
 
 druid_zk_service_host=zookeeper1:2181,zookeeper2:2182,zookeeper3:2183
 
@@ -46,10 +46,10 @@ druid_indexer_fork_property_druid_processing_buffer_sizeBytes=268435456
 # druid_indexer_logs_type=file
 # druid_indexer_logs_directory=/opt/data/indexing-logs
 
-druid_storage_type=hdfs #local
-druid_storage_storageDirectory=hdfs://namenode:8020/druid/segments #/druid/segments #/opt/data/segment
-druid_indexer_logs_type=file
-druid_indexer_logs_directory=/opt/data/indexing-logs
+druid_storage_type=hdfs
+druid_storage_storageDirectory=hdfs://namenode:9000/druid/segments
+druid_indexer_logs_type=hdfs
+druid_indexer_logs_directory=hdfs://namenode:9000/druid/indexing-logs
 
 druid_processing_numThreads=2
 druid_processing_numMergeBuffers=2

@@ -1,4 +1,4 @@
-version: "2.2"
+version: "3.8"
 
 volumes:
     druid_metadata_data_postgres: {}
@@ -32,6 +32,11 @@ volumes:
     nifi_flowfile: {}
     nifi_content: {}
     nifi_provenance: {}
+    nifi_logs: {}
+    nifi_datafiles: {}
+    nifi_scriptfiles: {}
+    nifi_certfiles: {}
+    nifi_data: {}
     redis_data: {}
     superset_postgres_data: {}
 
@@ -519,6 +524,7 @@ services:
     
     coordinator:
       image: apache/druid:0.17.0
+      hostname: coordinator
       container_name: druid_coordinator
       volumes:
         - druid_coordinator_data:/opt/data
@@ -542,6 +548,7 @@ services:
         - druid_environment
   
     broker:
+      hostname: broker
       image: apache/druid:0.17.0
       container_name: druid_broker
       volumes:
@@ -567,6 +574,7 @@ services:
         
   
     historical:
+      hostname: historical
       image: apache/druid:0.17.0
       container_name: druid_historical
       volumes:
@@ -593,6 +601,7 @@ services:
   
   
     middlemanager:
+      hostname: middlemanager
       image: apache/druid:0.17.0
       container_name: druid_middlemanager
       volumes:
@@ -618,6 +627,7 @@ services:
         - druid_environment
   
     router:
+      hostname: router
       image: apache/druid:0.17.0
       container_name: druid_router
       volumes:
@@ -644,15 +654,22 @@ services:
         - druid_environment
   
     nifi:
+      hostname: nifi
       image: apache/nifi
       container_name: nifi
       volumes:
-        - nifi_conf:/opt/nifi/conf
-        - nifi_state:/data/nifi/state
-        - nifi_db:/opt/nifi/database_repository
-        - nifi_flowfile:/opt/nifi/flowfile_repository
-        - nifi_content:/opt/nifi/content_repository
-        - nifi_provenance:/opt/nifi/provenance_repository 
+        - nifi_conf:/opt/nifi/nifi-current/conf
+        - nifi_state:/opt/nifi/nifi-current/state
+        - nifi_db:/opt/nifi/nifi-current/database_repository
+        - nifi_flowfile:/opt/nifi/nifi-current/flowfile_repository
+        - nifi_content:/opt/nifi/nifi-current/content_repository
+        - nifi_provenance:/opt/nifi/nifi-current/provenance_repository
+        - nifi_logs:/opt/nifi/nifi-current/logs
+        - nifi_datafiles:/opt/datafiles
+        - nifi_scriptfiles:/opt/scriptfiles
+        - nifi_certfiles:/opt/certfiles
+        - nifi_data:/opt/nifi/
+        - ./extra_lib/ojdbc-11.2.0.3-jdk16.jar:/opt/nifi/extra_lib/ojdbc-11.2.0.3-jdk16.jar
       ports:
         - "9080:9080"
       environment:
