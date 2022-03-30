@@ -7,9 +7,9 @@ list of apps:
 * postgres
 * nifi
 * superset
-* zookeeper
+* zqweqwookeeper
 * zoonavigator
-* zkui
+* zkuiasa
 * kafka
 * kafdrop
 * hadoop hdfs
