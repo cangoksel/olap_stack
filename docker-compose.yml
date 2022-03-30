@@ -22,7 +22,7 @@ volumes:
     hadoop_namenode_data: {}
     hadoop_datanode1_data: {}
     hadoop_datanode2_data: {}
-    # hadoop_druid_segment_data: {}
+    # xyz2 hadoop_druid_segment_data: {}
     # hadoop_druid_log_data: {}
     superset_data: {}
     superset_var: {}
