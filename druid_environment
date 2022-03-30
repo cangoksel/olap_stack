@@ -16,7 +16,7 @@
 # specific language governing permissions and limitations
 # under the License.
 #
-
+#hello world
 # Java tuning
 DRUID_XMX=1g
 DRUID_XMS=1g

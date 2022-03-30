@@ -61,7 +61,7 @@ services:
       volumes:
         - superset_postgres_data:/var/lib/postgresql/data
 
-    # Execute after: docker exec -it superset superset-init
+    # Execute after: xyz docker exec -it superset superset-init
     superset:
       container_name: superset
       hostname: superset
